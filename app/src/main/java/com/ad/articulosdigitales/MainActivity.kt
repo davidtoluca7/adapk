@@ -4,32 +4,33 @@ import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import androidx.appcompat.app.AppCompatActivity
-import android.widget.ImageView
 import android.view.View
-import com.bumptech.glide.Glide
+import android.webkit.*
+import android.widget.Button
+import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
-import android.webkit.WebResourceError
-import android.webkit.WebResourceRequest
-import android.os.Build
-import android.webkit.WebChromeClient
-import android.webkit.URLUtil
-import android.widget.Button
 import androidx.activity.OnBackPressedCallback
-import android.webkit.WebSettings
+import androidx.appcompat.app.AppCompatActivity
+import com.bumptech.glide.Glide
 
 class MainActivity : AppCompatActivity() {
 
     private lateinit var webView: WebView
+
+    // Ya tenías esto:
     private lateinit var progressBarBottom: ProgressBar
     private lateinit var errorTextView: TextView
     private lateinit var retryButton: Button
+
+    // **Estos son los que causaban error** (los necesitamos como propiedades de la clase):
+    private lateinit var progressBar: ProgressBar
+    private lateinit var progressText: TextView
+
     private var retryCount = 0
     private val handler = Handler(Looper.getMainLooper())
     private val retryDelays = arrayOf(3000L, 5000L, 10000L) // Tiempos de espera incrementales
@@ -39,12 +40,15 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
         val imageView = findViewById<ImageView>(R.id.splash_image)
-        webView = findViewById(R.id.webview)
-        val progressBar = findViewById<ProgressBar>(R.id.progress_bar)
-        val progressText = findViewById<TextView>(R.id.progress_text)
+
+        // Ahora asignamos progressBar y progressText a las propiedades de clase (sin 'val'):
+        progressBar = findViewById(R.id.progress_bar)
+        progressText = findViewById(R.id.progress_text)
+
         errorTextView = findViewById(R.id.error_text)
         progressBarBottom = findViewById(R.id.progress_bar_bottom)
         retryButton = findViewById(R.id.retry_button)
+        webView = findViewById(R.id.webview)
 
         // Cargar el GIF con Glide
         Glide.with(this)
@@ -70,7 +74,6 @@ class MainActivity : AppCompatActivity() {
         webView.webViewClient = object : WebViewClient() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-
                 // La página ha terminado de cargar, ocultar el GIF y la barra de progreso, y mostrar el WebView
                 imageView.visibility = View.GONE
                 progressBar.visibility = View.GONE
@@ -85,19 +88,19 @@ class MainActivity : AppCompatActivity() {
                     // Intent para abrir Facebook Messenger
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                     startActivity(intent)
-                    return true // Indicar que la carga de la URL ha sido manejada
+                    return true
 
                 } else if (url.startsWith("whatsapp://")) {
                     // Intent para abrir WhatsApp
                     val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
                     startActivity(intent)
-                    return true // Indicar que la carga de la URL ha sido manejada
+                    return true
 
                 } else if (url.startsWith("mailto:")) {
                     // Intent para abrir la aplicación de correo electrónico
                     val intent = Intent(Intent.ACTION_SENDTO, Uri.parse(url))
                     startActivity(intent)
-                    return true // Indicar que la carga de la URL ha sido manejada
+                    return true
                 }
 
                 // Para otros esquemas, dejar que el WebView los cargue normalmente
@@ -176,6 +179,7 @@ class MainActivity : AppCompatActivity() {
             }
         })
     }
+
     private fun handleNetworkError() {
         webView.visibility = View.GONE
         errorTextView.visibility = View.VISIBLE
@@ -183,7 +187,6 @@ class MainActivity : AppCompatActivity() {
         progressBarBottom.visibility = View.GONE
 
         if (retryCount < retryDelays.size) {
-
             errorTextView.text = "Reintentando en ${retryDelays[retryCount]/1000}..."
             handler.postDelayed({
                 if (isNetworkAvailable()) {
@@ -194,7 +197,6 @@ class MainActivity : AppCompatActivity() {
                     progressText.visibility = View.VISIBLE // Mostrar TextView de porcentaje
                     webView.reload()
                 } else {
-
                     handleNetworkError()
                 }
             }, retryDelays[retryCount])
@@ -210,6 +212,7 @@ class MainActivity : AppCompatActivity() {
         val activeNetworkInfo = connectivityManager.activeNetworkInfo
         return activeNetworkInfo != null && activeNetworkInfo.isConnected
     }
+
     private fun isValidUrl(url: String): Boolean {
         return try {
             URLUtil.isValidUrl(url) && URLUtil.isNetworkUrl(url)
