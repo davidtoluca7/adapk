@@ -1,0 +1,4 @@
+Cache
+Barras de navegación
+Logo al iniciar
+Barra de apertura
