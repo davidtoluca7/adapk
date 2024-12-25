@@ -3,6 +3,7 @@ package com.ad.articulosdigitales
 import android.content.Context
 import android.content.Intent
 import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -10,167 +11,113 @@ import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.webkit.*
-import android.widget.Button
 import android.widget.ImageView
 import android.widget.ProgressBar
-import android.widget.TextView
+import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import com.bumptech.glide.Glide
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var splashImage: ImageView
+    private lateinit var progressBar: ProgressBar
     private lateinit var webView: WebView
 
-    // Ya tenías esto:
-    private lateinit var progressBarBottom: ProgressBar
-    private lateinit var errorTextView: TextView
-    private lateinit var retryButton: Button
-
-    // **Estos son los que causaban error** (los necesitamos como propiedades de la clase):
-    private lateinit var progressBar: ProgressBar
-    private lateinit var progressText: TextView
-
+    // Variables para reintentos
     private var retryCount = 0
     private val handler = Handler(Looper.getMainLooper())
-    private val retryDelays = arrayOf(3000L, 5000L, 10000L) // Tiempos de espera incrementales
+    private val retryDelays = arrayOf(3000L, 5000L, 10000L)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        val imageView = findViewById<ImageView>(R.id.splash_image)
-
-        // Ahora asignamos progressBar y progressText a las propiedades de clase (sin 'val'):
+        // 1) Referencias
+        splashImage = findViewById(R.id.splash_image)
         progressBar = findViewById(R.id.progress_bar)
-        progressText = findViewById(R.id.progress_text)
-
-        errorTextView = findViewById(R.id.error_text)
-        progressBarBottom = findViewById(R.id.progress_bar_bottom)
-        retryButton = findViewById(R.id.retry_button)
         webView = findViewById(R.id.webview)
 
-        // Cargar el GIF con Glide
+        // 2) Cargar GIF con Glide de inmediato
         Glide.with(this)
             .asGif()
-            .load(R.drawable.splash_animation)
-            .into(imageView)
+            .load(R.drawable.splash_animation) // Cambia si tu GIF se llama diferente
+            .into(splashImage)
 
-        // Configurar el WebView (oculto inicialmente)
-        webView.settings.javaScriptEnabled = true
-        webView.settings.cacheMode = WebSettings.LOAD_DEFAULT // Respetar cabeceras de caché del servidor
+        // 3) Configurar WebView (caché activada)
+        val ws = webView.settings
+        ws.javaScriptEnabled = true
+        ws.cacheMode = WebSettings.LOAD_DEFAULT
         webView.visibility = View.GONE
 
-        // Configurar el botón de reintento
-        retryButton.setOnClickListener {
-            retryButton.visibility = View.GONE
-            errorTextView.visibility = View.GONE
-            progressBar.visibility = View.VISIBLE
-            progressText.visibility = View.VISIBLE
-            webView.reload()
-        }
-
-        // WebViewClient para manejar la carga de la página y errores
+        // 4) WebViewClient
         webView.webViewClient = object : WebViewClient() {
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
-                // La página ha terminado de cargar, ocultar el GIF y la barra de progreso, y mostrar el WebView
-                imageView.visibility = View.GONE
-                progressBar.visibility = View.GONE
-                progressText.visibility = View.GONE
+                // Ocultamos la imagen de splash
+                splashImage.visibility = View.GONE
+                // Mostramos el WebView
                 webView.visibility = View.VISIBLE
+                // Barra se oculta al terminar
+                progressBar.visibility = View.GONE
             }
 
+            // Si es un link a WhatsApp, Messenger, correo, se abre en la app externa
             override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
                 val url = request?.url.toString()
 
-                if (url.startsWith("https://m.me/")) {
-                    // Intent para abrir Facebook Messenger
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                    startActivity(intent)
-                    return true
-
-                } else if (url.startsWith("whatsapp://")) {
-                    // Intent para abrir WhatsApp
-                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-                    startActivity(intent)
-                    return true
-
-                } else if (url.startsWith("mailto:")) {
-                    // Intent para abrir la aplicación de correo electrónico
-                    val intent = Intent(Intent.ACTION_SENDTO, Uri.parse(url))
-                    startActivity(intent)
+                if (url.startsWith("whatsapp://")) {
+                    openExternal(url, "No se encontró la aplicación de WhatsApp.")
                     return true
                 }
-
-                // Para otros esquemas, dejar que el WebView los cargue normalmente
+                if (url.startsWith("mailto:")) {
+                    openExternal(url, "No se encontró una aplicación de correo.")
+                    return true
+                }
+                if (url.startsWith("https://m.me/")) {
+                    openExternal(url, "No se encontró la aplicación de Messenger.")
+                    return true
+                }
                 return false
             }
 
-            override fun onReceivedError(view: WebView?, request: WebResourceRequest?, error: WebResourceError?) {
-                super.onReceivedError(view, request, error)
-                progressBar.visibility = View.GONE
-                progressText.visibility = View.GONE
+            // Cuando no hay internet
+            override fun onReceivedError(view: WebView?, req: WebResourceRequest?, error: WebResourceError?) {
+                super.onReceivedError(view, req, error)
+                // Muestra el toast con tu texto extra
+                Toast.makeText(
+                    this@MainActivity,
+                    "No hay conexión a internet. Reintentando conexión...",
+                    Toast.LENGTH_SHORT
+                ).show()
 
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-                    if (error?.errorCode == ERROR_HOST_LOOKUP ||
-                        error?.errorCode == ERROR_CONNECT ||
-                        error?.errorCode == ERROR_TIMEOUT ||
-                        error?.errorCode == ERROR_UNKNOWN) {
-                        handleNetworkError()
-                        return
-                    }
-                }
-
-                webView.visibility = View.GONE
-                errorTextView.visibility = View.VISIBLE
-                retryButton.visibility = View.VISIBLE
-                errorTextView.text = "Error al cargar la página web."
-            }
-
-            // Mostrar la barra de progreso inferior al navegar por la web
-            override fun onPageCommitVisible(view: WebView?, url: String?) {
-                super.onPageCommitVisible(view, url)
-                progressBarBottom.visibility = View.VISIBLE
+                handleNetworkError()
             }
         }
 
-        // WebChromeClient para actualizar el progreso de la barra de progreso y el TextView
+        // 5) WebChromeClient para la barra
         webView.webChromeClient = object : WebChromeClient() {
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
                 super.onProgressChanged(view, newProgress)
                 progressBar.progress = newProgress
-                progressText.text = "$newProgress%"
-
-                if (newProgress == 100) {
-                    progressBar.visibility = View.GONE
-                    progressText.visibility = View.GONE
-                    progressBarBottom.visibility = View.GONE // Ocultar la barra inferior al terminar de cargar
-                } else {
+                if (newProgress < 100) {
                     progressBar.visibility = View.VISIBLE
-                    progressText.visibility = View.VISIBLE
                 }
             }
         }
 
-        // Mostrar la barra de progreso superior mientras se carga la página
-        progressBar.visibility = View.VISIBLE
-        progressText.visibility = View.VISIBLE
-
-        // Cargar la URL en el WebView
-        if (isValidUrl("https://articulosdigitales.com")) {
+        // 6) Cargar la URL si no hay estado guardado
+        if (savedInstanceState == null) {
             webView.loadUrl("https://articulosdigitales.com")
-        } else {
-            // Mostrar un mensaje de error si la URL no es válida
-            errorTextView.visibility = View.VISIBLE
-            errorTextView.text = "La URL no es válida."
         }
 
-        // Configurar la acción de onBackPressed
+        // 7) Botón atrás
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (webView.canGoBack()) {
-                    progressBarBottom.visibility = View.VISIBLE // Mostrar la barra de progreso inferior al ir hacia atrás
+                    progressBar.visibility = View.VISIBLE
+                    progressBar.progress = 0
                     webView.goBack()
                 } else {
                     isEnabled = false
@@ -180,44 +127,76 @@ class MainActivity : AppCompatActivity() {
         })
     }
 
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        webView.saveState(outState)
+    }
+
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        webView.restoreState(savedInstanceState)
+    }
+
+    // Abre apps externas
+    private fun openExternal(url: String, errorMsg: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+            startActivity(intent)
+        } catch (e: Exception) {
+            Toast.makeText(this, errorMsg, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    // Reintentos automáticos
     private fun handleNetworkError() {
         webView.visibility = View.GONE
-        errorTextView.visibility = View.VISIBLE
-        retryButton.visibility = View.VISIBLE
-        progressBarBottom.visibility = View.GONE
+        progressBar.visibility = View.GONE
 
         if (retryCount < retryDelays.size) {
-            errorTextView.text = "Reintentando en ${retryDelays[retryCount]/1000}..."
             handler.postDelayed({
                 if (isNetworkAvailable()) {
+                    // Muestra un toast "Conexión establecida"
+                    Toast.makeText(this, "Conexión establecida", Toast.LENGTH_SHORT).show()
+
                     retryCount = 0
-                    errorTextView.visibility = View.GONE
-                    retryButton.visibility = View.GONE
-                    progressBar.visibility = View.VISIBLE // Mostrar ProgressBar superior
-                    progressText.visibility = View.VISIBLE // Mostrar TextView de porcentaje
+                    progressBar.visibility = View.VISIBLE
+                    progressBar.progress = 0
                     webView.reload()
                 } else {
+                    // Reintento -> toast "No hay conexión a internet. Reintentando conexión..."
+                    Toast.makeText(
+                        this,
+                        "No hay conexión a internet. Reintentando conexión...",
+                        Toast.LENGTH_SHORT
+                    ).show()
                     handleNetworkError()
                 }
             }, retryDelays[retryCount])
             retryCount++
         } else {
-            // Máximo de reintentos alcanzado, mostrar mensaje de error
-            errorTextView.text = "No se pudo conectar después de varios intentos."
+            Toast.makeText(
+                this,
+                "No se pudo conectar después de varios intentos.",
+                Toast.LENGTH_LONG
+            ).show()
         }
     }
 
+    // Checar conexión
     private fun isNetworkAvailable(): Boolean {
-        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val activeNetworkInfo = connectivityManager.activeNetworkInfo
-        return activeNetworkInfo != null && activeNetworkInfo.isConnected
-    }
-
-    private fun isValidUrl(url: String): Boolean {
-        return try {
-            URLUtil.isValidUrl(url) && URLUtil.isNetworkUrl(url)
-        } catch (e: Exception) {
-            false
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val network = cm.activeNetwork ?: return false
+            val caps = cm.getNetworkCapabilities(network) ?: return false
+            return caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)
+                    || caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+                    || caps.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
+                    || caps.hasTransport(NetworkCapabilities.TRANSPORT_BLUETOOTH)
+        } else {
+            @Suppress("DEPRECATION")
+            val info = cm.activeNetworkInfo
+            @Suppress("DEPRECATION")
+            return info != null && info.isConnected
         }
     }
 }

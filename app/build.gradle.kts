@@ -52,12 +52,16 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+
+    // Dependencia de Lottie (sin duplicar)
+    implementation("com.airbnb.android:lottie:5.2.0")
+
     implementation("androidx.annotation:annotation:1.7.1")
-    implementation("androidx.appcompat:appcompat:1.6.1") // 1.6.1 es la última versión estable, usa la que prefieras
-    implementation("androidx.constraintlayout:constraintlayout:2.1.4") // 2.1.4 es la versión estable más reciente, puedes usar la que prefieras
-    implementation("com.google.android.material:material:1.10.0") // O la versión más reciente
-    implementation("com.github.bumptech.glide:glide:4.16.0") // Usa la versión más reciente
-    annotationProcessor("com.github.bumptech.glide:compiler:4.16.0") // También se require el compiler
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    implementation("com.google.android.material:material:1.10.0")
+    implementation("com.github.bumptech.glide:glide:4.16.0")
+    annotationProcessor("com.github.bumptech.glide:compiler:4.16.0")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
